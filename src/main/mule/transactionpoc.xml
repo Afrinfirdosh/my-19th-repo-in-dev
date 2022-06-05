@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="5e85d169-2df8-48d0-af5d-22b65fd74092" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="7ae1d945-43c8-4ad8-8722-2021ca54b9de" >
+		<db:oracle-connection host="localhost" user="sys as sysdba" password="Oracle123" instance="orcl"/>
+	</db:config>
+	<flow name="transactionpocFlow" doc:id="9349873b-cd89-4eaa-8bf7-25a94a0f464a" initialState="started">
+		<http:listener doc:name="Listener" doc:id="54d352b4-8437-4c72-9b12-917fcf947d1e" config-ref="HTTP_Listener_config" path="/testtransaction"/>
+		<ee:transform doc:name="CustomerDetails" doc:id="84787802-2cee-4617-9fbe-3e9a75c61329" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="customerdetails" ><![CDATA[%dw 2.0
+output application/java
+---
+payload map((item,index) ->{
+	
+	"CUSTOMER_ID":item.Customerid,
+	"FIRSTNAME":item.Firstname,
+	"LASTNAME":item.Lastname,
+	"UPDATEDDATE":item.Updateddate
+})]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="AddressDetails" doc:id="f80de394-c251-4183-b6b8-dccdddfaeca7">
+			<ee:message>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="addressdetails" ><![CDATA[%dw 2.0
+output application/java
+---
+payload map((item,index) ->{
+	
+	"CUSTOMER_ID":item.Customerid,
+	"ADDRESS1":item.Address1,
+	"ADDRESS2":item.Address2,
+	"POSTALCODE":item.Postalcode,
+	"CITY":item.City,
+	"UPDATEDDATE":item.Updateddate
+})]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<try doc:name="Try" doc:id="89db53ec-bdd5-4b62-8c0f-a50907b43a2c" transactionalAction="ALWAYS_BEGIN">
+			<db:bulk-insert doc:name="CustomerInsert" doc:id="6ab16732-9b4d-4dfb-b142-430c38bbbef8" config-ref="Database_Config" transactionalAction="ALWAYS_JOIN">
+			<db:bulk-input-parameters><![CDATA[#[vars.customerdetails]]]></db:bulk-input-parameters>
+			<db:sql>insert into customers (CUSTOMER_ID,FIRSTNAME,LASTNAME,UPDATEDDATE) 
+values(:CUSTOMER_ID,:FIRSTNAME,:LASTNAME,:UPDATEDDATE)</db:sql>
+		</db:bulk-insert>
+			<db:bulk-insert doc:name="AddressInsert" doc:id="66513576-6d04-4b74-b92a-f4e103be6342" config-ref="Database_Config" transactionalAction="ALWAYS_JOIN">
+			<db:bulk-input-parameters><![CDATA[#[vars.addressdetails]]]></db:bulk-input-parameters>
+			<db:sql>insert into address (CUSTOMER_ID,ADDRESS1,ADDRESS2,POSTALCODE,CITY,UPDATEDDATE) 
+values(:CUSTOMER_ID,:ADDRESS1,:ADDRESS2,:POSTALCODE,:CITY,:UPDATEDDATE)</db:sql>
+		</db:bulk-insert>
+			<error-handler>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="a8542ae2-ed0e-4b0d-a819-e4397d36a899" >
+					<logger level="INFO" doc:name="Logger" doc:id="28a6162e-09c8-4dfb-af44-41a735cfb4a8" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+	</flow>
+</mule>
